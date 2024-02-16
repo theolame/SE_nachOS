@@ -38,9 +38,6 @@
 #include "kernel/synch.h"
 #include "machine/interrupt.h"
 
-extern Interrupt *interrupt;
-extern Scheduler *scheduler;
-
 //----------------------------------------------------------------------
 // Semaphore::Semaphore
 /*! 	Initializes a semaphore, so that it can be used for synchronization.
@@ -91,7 +88,7 @@ Semaphore::~Semaphore()
 //----------------------------------------------------------------------
 
 void Semaphore::P() {
-  interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
+  IntStatus oldlevel = g_machine->interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
 
   // Decrement the semaphore counter
   counter--;
@@ -102,7 +99,7 @@ void Semaphore::P() {
     g_current_thread->Sleep();
   }
 
-  interrupt->SetStatus(INTERRUPTS_ON); // Restore interrupt state
+  g_machine->interrupt->SetStatus(oldlevel); // Restore interrupt state
 }
 
 
@@ -115,7 +112,7 @@ void Semaphore::P() {
 */
 //----------------------------------------------------------------------
 void Semaphore::V() {
-  interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
+  IntStatus oldlevel = g_machine->interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
 
   // Increment the semaphore counter
   counter++;
@@ -123,10 +120,10 @@ void Semaphore::V() {
   // If there are threads waiting, wake up the first one
   if (counter <= 0) {
     Thread *t = (Thread *)waiting_queue->Remove();
-    scheduler->ReadyToRun(t);
+    g_scheduler->ReadyToRun(t);
   }
 
-  interrupt->SetStatus(INTERRUPTS_ON); // Restore interrupt state
+  g_machine->interrupt->SetStatus(oldlevel); // Restore interrupt state
 }
 
 
@@ -172,7 +169,7 @@ Lock::~Lock() {
 */
 //----------------------------------------------------------------------
 void Lock::Acquire() {
-  interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
+  IntStatus oldlevel = g_machine->interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
 
   // Wait until the lock becomes free
   while (!free) {
@@ -184,7 +181,7 @@ void Lock::Acquire() {
   free = false;
   owner = g_current_thread;
 
-  interrupt->SetStatus(INTERRUPTS_ON);  // Restore interrupt state
+  g_machine->interrupt->SetStatus(oldlevel);  // Restore interrupt state
 }
 
 
@@ -198,7 +195,7 @@ void Lock::Acquire() {
 */
 //----------------------------------------------------------------------
 void Lock::Release() {
-  interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
+  IntStatus oldlevel = g_machine->interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
 
   // Check if the lock is held by the current thread
   ASSERT(isHeldByCurrentThread());
@@ -206,14 +203,14 @@ void Lock::Release() {
   // If there are waiting threads, wake up the first one
   if (!waiting_queue->IsEmpty()) {
     Thread *t = (Thread *)waiting_queue->Remove();
-    scheduler->ReadyToRun(t);
+    g_scheduler->ReadyToRun(t);
   } else {
     // Release the lock
     free = true;
     owner = NULL;
   }
 
-  interrupt->SetStatus(INTERRUPTS_ON); // Restore interrupt state
+  g_machine->interrupt->SetStatus(oldlevel); // Restore interrupt state
 }
 
 
@@ -258,13 +255,13 @@ Condition::~Condition() {
 */	
 //----------------------------------------------------------------------
 void Condition::Wait() {
-  interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
+  IntStatus oldlevel = g_machine->interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
 
   // Move the current thread to the condition's wait queue and put it to sleep
   waiting_queue->Append((void *)g_current_thread);
   g_current_thread->Sleep();
 
-  interrupt->SetStatus(INTERRUPTS_ON); // Restore interrupt state
+  g_machine->interrupt->SetStatus(oldlevel); // Restore interrupt state
 }
 
 
@@ -275,15 +272,15 @@ void Condition::Wait() {
 */
 //----------------------------------------------------------------------
 void Condition::Signal() {
-  interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
+  IntStatus oldlevel = g_machine->interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
 
   // If there are waiting threads, wake up the first one
   if (!waiting_queue->IsEmpty()) {
     Thread *t = (Thread *)waiting_queue->Remove();
-    scheduler->ReadyToRun(t);
+    g_scheduler->ReadyToRun(t);
   }
 
-  interrupt->SetStatus(INTERRUPTS_ON); // Restore interrupt state
+  g_machine->interrupt->SetStatus(oldlevel); // Restore interrupt state
 }
 
 
@@ -294,14 +291,14 @@ void Condition::Signal() {
 */
 //----------------------------------------------------------------------
 void Condition::Broadcast() {
-  interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
+  IntStatus oldlevel = g_machine->interrupt->SetStatus(INTERRUPTS_OFF); // Disable interrupts
 
   // Wake up all threads in the wait queue
   while (!waiting_queue->IsEmpty()) {
     Thread *t = (Thread *)waiting_queue->Remove();
-    scheduler->ReadyToRun(t);
+    g_scheduler->ReadyToRun(t);
   }
 
-  interrupt->SetStatus(INTERRUPTS_ON);  // Restore interrupt state
+  g_machine->interrupt->SetStatus(oldlevel);  // Restore interrupt state
 }
 
